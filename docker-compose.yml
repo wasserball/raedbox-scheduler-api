@@ -1,0 +1,8 @@
+version: '2'
+services:
+  scheduler-api:
+    build: .
+    environment:
+      DOCKER: 'true'
+    ports:
+    - "8081:8081"

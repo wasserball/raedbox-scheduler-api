@@ -150,6 +150,8 @@ func main() {
 		dataPath = "/data"
 	}
 
+	println("dataPath: ", dataPath)
+
 	downloadWOD();
 
 	gocron.Every(1).Hour().Do(downloadWOD)
