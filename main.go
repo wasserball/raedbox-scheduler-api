@@ -11,6 +11,8 @@ import (
 	"os"
 	"net/http"
 	"io/ioutil"
+	"path/filepath"
+	"io"
 )
 
 
@@ -23,6 +25,40 @@ func check(e error) {
 
 var dataPath string
 var wodsPath string
+var stundenplanPath string
+
+
+
+func downloadStundenplan(){
+	doc, err := goquery.NewDocument("http://www.raedbox.eu/stundenplan")
+	check(err)
+
+	doc.Find(".post-entry a").Each(func(i int, s *goquery.Selection) {
+		// For each item found, get the band and title
+		imgUrl, _ := s.Attr("href")
+		var extension = filepath.Ext(imgUrl)
+		if(len(extension) > 0 && strings.Contains(imgUrl, "Stundenplan")){
+			println(imgUrl)
+			response, err := http.Get(imgUrl)
+			check(err)
+
+			tmpImagePath := stundenplanPath + ".jpg"
+
+			// save file
+			file, err := os.Create(tmpImagePath)
+			check(err)
+			_, err = io.Copy(file, response.Body)
+			file.Close()
+
+			// rename
+			err =  os.Rename(tmpImagePath, stundenplanPath)
+			check(err)
+
+			fmt.Println("Image saved!")
+
+		}
+	})
+}
 
 func downloadWOD() {
 	println("start downloadWOD ...")
@@ -122,7 +158,7 @@ type WOD struct {
 	Wod 	string `json:"wod"`
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func wods(w http.ResponseWriter, r *http.Request) {
 
 	file, err := ioutil.ReadFile(wodsPath)
 	check(err)
@@ -137,12 +173,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		json.NewEncoder(w).Encode(jsonToSend)
 	}
-
 }
+
+func stundenplan(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, stundenplanPath)
+}
+
 
 func startPolling() {
 	// run @ start
-	downloadWOD()
+	//downloadWOD()
+	downloadStundenplan()
 	for {
 		// run every 1 Hours
 		time.Sleep(1 * time.Hour)
@@ -156,6 +197,9 @@ func main() {
 		dataPath = "/data"
 	}
 	wodsPath = dataPath + "/json/wods.json"
+
+	stundenplanPath = dataPath + "/img/Stundenplan.jpg"
+
 	println("dataPath: ", dataPath, "wodsPath:", wodsPath)
 
 	go startPolling()
@@ -163,7 +207,8 @@ func main() {
 	t := time.Now()
 	fmt.Println("Current Time:", t.Format("15:04:05.000"))
 
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/wods", wods)
+	http.HandleFunc("/stundenplan", stundenplan)
 	http.ListenAndServe(":8081", nil)
 
 }
