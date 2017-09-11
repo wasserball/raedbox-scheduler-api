@@ -182,12 +182,13 @@ func stundenplan(w http.ResponseWriter, r *http.Request) {
 
 func startPolling() {
 	// run @ start
-	//downloadWOD()
+	downloadWOD()
 	downloadStundenplan()
 	for {
 		// run every 1 Hours
 		time.Sleep(1 * time.Hour)
 		go downloadWOD()
+		go downloadStundenplan()
 	}
 }
 
