@@ -208,8 +208,8 @@ func main() {
 	t := time.Now()
 	fmt.Println("Current Time:", t.Format("15:04:05.000"))
 
-	http.HandleFunc("/wods", wods)
-	http.HandleFunc("/stundenplan", stundenplan)
+	http.HandleFunc("/raedbox/wods", wods)
+	http.HandleFunc("/raedbox/stundenplan", stundenplan)
 	http.ListenAndServe(":8081", nil)
 
 }
