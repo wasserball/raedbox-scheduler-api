@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"time"
-	"github.com/jasonlvhit/gocron"
 	"github.com/PuerkitoBio/goquery"
 	"log"
 	"strings"
@@ -17,19 +16,19 @@ import (
 
 func check(e error) {
 	if e != nil {
-		//log.Fatalf("%s:", e)
+		log.Fatalf("%s:", e)
 		panic(e)
 	}
 }
 
+var dataPath string
+var wodsPath string
+
 func downloadWOD() {
+	println("start downloadWOD ...")
 
 	doc, err := goquery.NewDocument("http://www.raedbox.eu/wod/")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-
+	check(err)
 	wods := make(map[string]string)
 
 	keyString := ""
@@ -44,32 +43,23 @@ func downloadWOD() {
 			if(len(tmp) == 3){
 				stringDate = tmp[1] + "-" + tmp[0] + "-" + "20" + tmp[2]  + " 10:00:00"
 				t, _ := time.Parse("1-2-2006 15:04:05", stringDate)
-				//fmt.Print(t.Day(), t.Month(), t.Year(), "\n")
-				//fmt.Println(t.Format("2006-01-02"))
-
 				keyString = t.Format("2006-01-02")
-
 				wods[keyString] = wod
 			} else {
 				wods[keyString] =wods[keyString] + "\n\n" + wod
 			}
-			//fmt.Printf(stringDate)
 		}
 	})
 
-	jsonPath := dataPath + "/json/wods.json"
+	t := time.Now()
+	jsonPath := dataPath + "/json/"+t.Format("20060102150405")+"-wods.json"
 
 	// delete file
-	err = os.Remove(jsonPath)
-	if err != nil {
-		panic(err)
-	}
-
+	//err = os.Remove(jsonPath)
+	//check(err)
 
 	f, err := os.OpenFile(jsonPath, os.O_CREATE | os.O_WRONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
+	check(err)
 
 	defer f.Close()
 
@@ -82,11 +72,9 @@ func downloadWOD() {
 
 	// To perform the opertion you want
 	for i, k := range keys {
-		//fmt.Println("Key:", k, "Value:", wods[k])
 
-		jsonString, _ := json.Marshal(wods[k])
-		fmt.Println(string(jsonString))
-
+		//jsonString, _ := json.Marshal(wods[k])
+		//fmt.Println(string(jsonString))
 
 		str := strings.Replace( wods[k], "'", "", -1)
 		str = strings.Replace( str, `"`, `\"`, -1)
@@ -107,15 +95,27 @@ func downloadWOD() {
 
 		if _, err = f.WriteString(firstLine + "{\"date\":\"" + k + "\"," + "\"wod\":\"" + str + "\"}" + lastLine); err != nil {
 			panic(err)
+		} else {
+
+			file, err := ioutil.ReadFile(jsonPath)
+			// file exists
+			if err == nil {
+				// test Unmarshal
+				var jsonToSend []WOD
+				err = json.Unmarshal(file, &jsonToSend)
+				// array is OK and min one wod
+				if err == nil && len(jsonToSend) > 0{
+					println("jsonToSend length", len(jsonToSend))
+					// rename file
+					err =  os.Rename(jsonPath, wodsPath)
+					check(err)
+					println("file rename OK", jsonPath, wodsPath)
+
+				}
+			}
 		}
 	}
-
-
-
-	fmt.Println("i'm bored!!! --> please give me something to do...")
 }
-
-var configPath string
 
 type WOD struct {
 	Date	string `json:"date"`
@@ -124,52 +124,46 @@ type WOD struct {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 
-	jsonPath := dataPath + "/json/wods.json"
-	file, e := ioutil.ReadFile(jsonPath)
-	if e != nil {
-		fmt.Printf("File error: %v\n", e)
-		os.Exit(1)
+	file, err := ioutil.ReadFile(wodsPath)
+	check(err)
+
+	var jsonToSend []WOD
+	err = json.Unmarshal(file, &jsonToSend)
+
+	if err != nil {
+		emptyArray := make([]string, 0)
+		println("json.Unmarshal error", err)
+		json.NewEncoder(w).Encode(emptyArray)
+	} else {
+		json.NewEncoder(w).Encode(jsonToSend)
 	}
 
-
-	//m := new(Dispatch)
-	//var m interface{}
-	var jsontype []WOD
-	json.Unmarshal(file, &jsontype)
-
-	json.NewEncoder(w).Encode(jsontype)
-	//fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 }
-var dataPath string
 
+func startPolling() {
+	// run @ start
+	downloadWOD()
+	for {
+		// run every 1 Hours
+		time.Sleep(1 * time.Hour)
+		go downloadWOD()
+	}
+}
 
 func main() {
-
 	dataPath = "./data"
 	if (os.Getenv("DOCKER") == "true") {
 		dataPath = "/data"
 	}
+	wodsPath = dataPath + "/json/wods.json"
+	println("dataPath: ", dataPath, "wodsPath:", wodsPath)
 
-	println("dataPath: ", dataPath)
-
-	downloadWOD();
-
-	gocron.Every(1).Hour().Do(downloadWOD)
-
-	// remove, clear and next_run
-	_, NextRunTime := gocron.NextRun()
-	fmt.Println("next run:", NextRunTime)
+	go startPolling()
 
 	t := time.Now()
 	fmt.Println("Current Time:", t.Format("15:04:05.000"))
 
-
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(":8081", nil)
-
-
-	// function Start start all the pending jobs
-	<-gocron.Start()
-
 
 }

@@ -10,7 +10,6 @@ RUN apt-get install -y vim
 # Add workers
 ADD main.go /go/src/github.com/wasserball/raedbox/scheduler-api/
 # install dependencies
-RUN go get "github.com/jasonlvhit/gocron"
 RUN go get "github.com/PuerkitoBio/goquery"
 
 # create config dir
